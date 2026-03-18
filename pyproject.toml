@@ -1,0 +1,24 @@
+[project]
+name = "ghostscrape"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "hendrikbgr",email = "hendrik.postfach@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "httpx (>=0.28.1,<0.29.0)",
+    "trafilatura (>=2.0.0,<3.0.0)",
+    "typer (>=0.24.1,<0.25.0)",
+    "rich (>=14.3.3,<15.0.0)",
+    "fake-useragent (>=2.2.0,<3.0.0)",
+    "beautifulsoup4 (>=4.14.3,<5.0.0)",
+    "lxml (>=6.0.2,<7.0.0)",
+    "python-dotenv (>=1.2.2,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
