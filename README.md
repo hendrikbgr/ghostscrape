@@ -75,6 +75,8 @@ GhostScrape is designed from the ground up to never stall and never get permanen
 - 🧲 **Sticky Proxies:** When a worker finds a proxy that penetrates a firewall, it immediately caches it locally. Future URLs processed by that worker bypass the 5-proxy race entirely, routing directly through the "known good" proxy to scrape at maximum velocity!
 - 🛡️ **Auto-Banning & Rotation:** If a proxy is caught and throws a `403 Forbidden` or `429 Too Many Requests`, GhostScrape communicates with your Proxy Pool API to ban that IP permanently, ensuring workers never waste time on burnt addresses.
 - 🎭 **Fingerprint Randomization:** Every single request is paired with a randomized, real-world browser `User-Agent` to trick basic bot mitigation scripts.
+- 🤖 **Playwright SPA Fallback:** If GhostScrape encounters a heavily JavaScript-hydrated application (like React/Next.js) resulting in an empty payload shell, it instantly spins up a headless Chromium browser through the verified proxy to execute the JS and extract the true semantic text.
+- 🏷️ **LLM Metadata Injection:** Every extracted `.md` file is automatically prepended with clean YAML Frontmatter (containing the origin URL, domain, and ISO timestamp) to generate perfectly structured citations for your RAG Vector Databases.
 
 ---
 
@@ -97,6 +99,9 @@ cd ghostscrape
 
 # 2. Install dependencies via Poetry
 poetry install
+
+# 3. Install Headless Chromium (for SPA fallback rendering)
+poetry run playwright install chromium
 ```
 
 ---
@@ -110,17 +115,17 @@ GhostScrape is invoked via a beautiful CLI backed by `Typer` and `Rich`.
 Automatically parse an XML sitemap and concurrently download every single page:
 
 ```bash
-poetry run python main.py --target https://docs.docker.com/sitemap.xml --concurrency 50
+ghostscrape --target https://docs.docker.com/sitemap.xml --concurrency 50
 ```
 
-*(Note: Typer automatically collapses the command to the main script if you only have one sub-command, so you don't need to include `run` in the syntax!)*
+*(Note: Typer intelligently handles the commands behind the scenes!)*
 
 ### Scrape a Tricky Single Page
 
 Target heavily protected, heavily JavaScript-reliant pages:
 
 ```bash
-poetry run python main.py --target https://news.ycombinator.com/ --concurrency 1
+gs --target https://news.ycombinator.com/ --concurrency 1
 ```
 
 ### Output 📂
@@ -152,9 +157,9 @@ Simply rename `.env.example` to `.env` and drop your key in:
 PROXY_API_KEY=your_api_key_here
 ```
 
-To run with a custom API key directly in the CLI:
+To run with a custom API key bypassing the `.env` temporarily:
 ```bash
-poetry run python main.py --target https://example.com --api-key "your_api_key_here"
+ghostscrape --target https://example.com --api-key "your_api_key_here"
 ```
 
 *(Note: GhostScrape currently integrates natively with the Vercel Proxy Pool API for dynamic IP streaming and endpoint banning).*

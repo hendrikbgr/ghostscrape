@@ -2,6 +2,8 @@ import typer
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, DownloadColumn, TextColumn, BarColumn, TimeElapsedColumn
 import asyncio
+from dotenv import load_dotenv
+load_dotenv()
 
 from ghostscrape.ingestion import build_queue
 from ghostscrape.models import Job

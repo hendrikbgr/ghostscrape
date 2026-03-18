@@ -6,13 +6,14 @@ from pathlib import Path
 from fake_useragent import UserAgent
 import trafilatura
 from rich.progress import Progress
-from typing import List
+import typing
+from datetime import datetime, timezone
 
 from .models import Job
 from .proxy_manager import ProxyManager
 
 class ScraperEngine:
-    def __init__(self, jobs: List[Job], proxy_manager: ProxyManager, concurrency: int, progress: Progress, task_id):
+    def __init__(self, jobs: typing.List[Job], proxy_manager: ProxyManager, concurrency: int, progress: Progress, task_id):
         self.queue = asyncio.Queue()
         for job in jobs:
             self.queue.put_nowait(job)
@@ -57,6 +58,23 @@ class ScraperEngine:
                 return response.text
         except Exception as e:
             raise e
+
+    async def _playwright_fallback(self, url: str, proxy_url: str) -> str | None:
+        from playwright.async_api import async_playwright
+        try:
+            async with async_playwright() as p:
+                proxy_settings = {"server": f"http://{proxy_url}"} if proxy_url else None
+                browser = await p.chromium.launch(proxy=proxy_settings, headless=True)
+                page = await browser.new_page(user_agent=self.ua.random)
+                await page.goto(url, wait_until="networkidle", timeout=15000)
+                content = await page.content()
+                await browser.close()
+                return content
+        except Exception as e:
+            import os
+            if os.environ.get("DEBUG"):
+                print(f"Playwright fallback failed for {url}: {e}")
+            return None
 
     async def _try_proxy(self, url: str) -> tuple[str, str | None]:
         proxy_url = await self.proxy_manager.get_proxy()
@@ -135,21 +153,38 @@ class ScraperEngine:
         # 3. Process success or requeue
         if success_content:
             markdown = trafilatura.extract(success_content)
+            
+            # Playwright Headless Fallback for heavy JS SPAs
+            if (not markdown or len(markdown.strip()) < 150) and proxy_used:
+                pw_content = await self._playwright_fallback(job.url, proxy_used)
+                if pw_content:
+                    markdown = trafilatura.extract(pw_content)
+                    if not markdown:
+                        from bs4 import BeautifulSoup
+                        soup = BeautifulSoup(pw_content, "html.parser")
+                        markdown = soup.get_text(separator="\n\n", strip=True)
+
+            # Standard BS4 text fallback if still empty
             if not markdown:
-                # Fallback for sites like Reddit/HN with no standard article body
                 from bs4 import BeautifulSoup
                 soup = BeautifulSoup(success_content, "html.parser")
                 markdown = soup.get_text(separator="\n\n", strip=True)
 
             if markdown:
                 domain = self._get_domain(job.url)
+                
+                # Inject YAML Frontmatter Metadata
+                timestamp = datetime.now(timezone.utc).isoformat()
+                frontmatter = f"---\nurl: {job.url}\ndomain: {domain}\nscraped_at: {timestamp}\n---\n\n"
+                final_markdown = frontmatter + markdown
+
                 slug = self._slugify(job.url)
                 domain_dir = self.output_dir / domain
                 domain_dir.mkdir(exist_ok=True)
                 
                 file_path = domain_dir / f"{slug}.md"
                 with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(markdown)
+                    f.write(final_markdown)
                 
                 async with self.lock:
                     self.files_saved += 1
